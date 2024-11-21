@@ -1,0 +1,151 @@
+﻿@page "/"
+@using Blazor.Extensions
+@using Blazor.Extensions.Canvas
+@using Blazor.Extensions.Canvas.Canvas2D
+@using System;
+@using System.Linq;
+@using System.Threading;
+
+<PageTitle>Index</PageTitle>
+
+<BECanvas Height="600" Width="600" @ref="canvasRef"></BECanvas>
+
+@code{
+    BECanvasComponent canvasRef;
+    Canvas2DContext context;
+    System.Threading.Timer timer;
+
+    //variables for number of shapes, so that they can make loop to make random kiddo classes
+    int numSquares = 5;
+    int numCircles = 5;
+
+    //list storeing all shapes 
+    List<Shape> shapes = new List<Shape>();
+
+    //timer updating canvas, the tick calls the (update volocity, update position by volocity, erase board, draw board)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        context = await canvasRef.CreateCanvas2DAsync();
+
+        //initialize meathod(set up random/positions, velocities, then create(run path)) for shapes only on first render                (sounds very mincrafty lol) 
+        if (firstRender)
+        {
+            InitializeShapes();
+        }
+        //makes tick/timer for updates to work on (time in ms)
+        timer = new System.Threading.Timer(OnTick, null, 0, 5);
+    }
+
+    //initialize meathod for shapes getting random positions and velocities on first render                                      (I know I said that earlyer, but it can be usful if only reading this part)
+    //needed to set a bunch of randomized shapes, then let shapes be in other code to work
+    private void InitializeShapes()
+    {
+        Random random = new Random();
+
+        //create squares for how many squares set in numSquares verable (polymorphism?)
+        for (int i = 0; i < numSquares; i++)
+        {
+            shapes.Add(new Square
+            {
+                x = random.Next(0, 550),
+                y = random.Next(0, 550),
+                vx = random.NextDouble() * 2.5 - 1.5,
+                vy = random.NextDouble() * 2.5 - 1.5,
+                w = 50,
+                h = 50
+            });
+        }
+
+        //same as squares for circles
+        //create circles for how many circles set in numCircles verable (polymorphism?)
+        for (int i = 0; i < numCircles; i++)
+        {
+            shapes.Add(new Circle
+            {
+                x = random.Next(0, 550),
+                y = random.Next(0, 550),
+                vx = random.NextDouble() * 4 - 2,
+                vy = random.NextDouble() * 4 - 2,
+                w = 50,
+                h = 50
+            });
+        }
+    }
+
+    //called every #ms to update the canvas
+    protected async void OnTick(object? obj)
+    {
+        //BeginBatchAsync is blazor meathod in canvas2d putting all paths in one
+        await context.BeginBatchAsync();
+        //clear screen
+        await context.ClearRectAsync(0, 0, 600, 600);
+
+        //update and draw shapes
+        foreach (var shape in shapes)
+        {
+            shape.Move();
+            shape.CheckBounds(600, 600);
+            shape.Draw(context);
+        }
+
+        //draw border
+        await context.SetStrokeStyleAsync("black");
+        await context.StrokeRectAsync(0, 0, 600, 600);
+        //end path
+        await context.EndBatchAsync();
+    }
+
+    //parent of all shapes so they instantiate the same verables(which they make their own random numbers for)
+    //only uses parent values from the w & h
+    //parent has moving and bouncing meathods in them
+    //kiddo classes only draw their shape
+    public class Shape
+    {
+        public double x { get; set; }
+        public double y { get; set; }
+        public double vx { get; set; }
+        public double vy { get; set; }
+        public double w { get; set; }
+        public double h { get; set; }
+
+        //move the shape based on velocity
+        public void Move()
+        {
+            x += vx;
+            y += vy;
+        }
+
+        //check if shape hits wall, change directions
+        public void CheckBounds(double canvasWidth, double canvasHeight)
+        {
+            if (x <= 0 || x + w >= canvasWidth) vx = -vx;
+            if (y <= 0 || y + h >= canvasHeight) vy = -vy;
+        }
+
+        //draw the shape(then eventully overridden by kiddo classes)
+        public virtual Task Draw(Canvas2DContext context) => Task.CompletedTask;
+    }
+
+    //square kiddo so that it takes parent values and uses them to make a square
+    //remeber that the paths are put together as one, cause BeginBatchAsync
+    public class Square : Shape
+    {
+        public override async Task Draw(Canvas2DContext context)
+        {
+            await context.FillRectAsync(x, y, w, h);
+        }
+    }
+
+    //same for circle
+    //circle kiddo so that it takes parent values and uses them to make a circle
+    //remeber that the paths are put together as one, cause BeginBatchAsync
+    public class Circle : Shape
+    {
+        public override async Task Draw(Canvas2DContext context)
+        {
+            await context.BeginPathAsync();
+            await context.ArcAsync(x + w / 2, y + h / 2, w / 2, 0, Math.PI * 2);  // Draw circle
+            await context.FillAsync();  // Fill circle with current fill style
+        }
+    }
+}
